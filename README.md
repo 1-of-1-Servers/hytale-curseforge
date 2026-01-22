@@ -29,4 +29,4 @@ HYTALE_MODS_PATH=files/mods
 
 - This plugin intentionally does **not** cache CurseForge API responses.
 - If the API key is missing, the page will show empty results and downloads will error.
-- Credits to Boy132 as I took the base of his rust-umod and modified it for this project. 
+- Credits to [Boy132](https://github.com/Boy132) as I took the base of his [rust-umod](https://github.com/pelican-dev/plugins/tree/main/rust-umod) and modified it for this project. 
