@@ -2,7 +2,7 @@
   "id": "hytale-curseforge",
   "name": "Hytale CurseForge",
   "author": "MonkeyWhisper",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Browse and install Hytale mods from CurseForge directly into /files/mods",
   "category": "plugin",
   "url": "https://github.com/pelican-dev/plugins/tree/main/hytale-curseforge",

@@ -29,8 +29,8 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
     protected static ?string $slug = 'hytale-mods';
     protected static ?int $navigationSort = 30;
 
-    // /var/www/pelican/resources/views/filament/server/pages/hytale-curse-forge-mods-page.blade.php
-    protected string $view = 'filament.server.pages.hytale-curse-forge-mods-page';
+    // Plugin view namespace (registered in HytaleCurseForgeServiceProvider)
+    protected string $view = 'hytale-curseforge::filament.server.pages.hytale-curse-forge-mods-page';
 
     /**
      * Sidebar filters (Livewire state)
