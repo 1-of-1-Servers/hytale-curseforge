@@ -19,6 +19,10 @@ CURSEFORGE_HYTALE_GAME_ID=70216
 HYTALE_MODS_PATH=files/mods
 ```
 
+## Preview
+<img width="3398" height="1920" alt="image" src="https://github.com/user-attachments/assets/a8b4b91b-97fa-4247-9fad-52862cb96451" />
+
+
 ## Behavior
 
 - Search & browse Hytale mods via CurseForge
