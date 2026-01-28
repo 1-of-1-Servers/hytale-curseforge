@@ -1,17 +1,22 @@
 {
-  "id": "hytale-curseforge",
-  "name": "Hytale CurseForge",
-  "author": "MonkeyWhisper",
-  "version": "1.0.1",
-  "description": "Browse and install Hytale mods from CurseForge directly into /files/mods",
-  "category": "plugin",
-  "url": "https://github.com/pelican-dev/plugins/tree/main/hytale-curseforge",
-  "update_url": null,
-  "namespace": "OneOfOne\\HytaleCurseForge",
-  "class": "HytaleCurseForgePlugin",
-  "panels": [
-    "server"
-  ],
-  "panel_version": null,
-  "composer_packages": null
+    "id": "hytale-curseforge",
+    "name": "Hytale CurseForge",
+    "author": "MonkeyWhisper",
+    "version": "1.0.1",
+    "description": "Browse and install Hytale mods from CurseForge directly into /files/mods",
+    "category": "plugin",
+    "url": "https://github.com/pelican-dev/plugins/tree/main/hytale-curseforge",
+    "update_url": null,
+    "namespace": "OneOfOne\\HytaleCurseForge",
+    "class": "HytaleCurseForgePlugin",
+    "panels": [
+        "admin",
+        "server"
+    ],
+    "panel_version": null,
+    "composer_packages": null,
+    "meta": {
+        "status": "enabled",
+        "status_message": null
+    }
 }

@@ -2,11 +2,18 @@
 
 namespace OneOfOne\HytaleCurseForge;
 
+use App\Contracts\Plugins\HasPluginSettings;
+use App\Traits\EnvironmentWriterTrait;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
-
-class HytaleCurseForgePlugin implements Plugin
+use Filament\Forms\Components\TextInput;
+/**
+ * Fixed by Eranio
+ */
+class HytaleCurseForgePlugin implements HasPluginSettings, Plugin
 {
+    use EnvironmentWriterTrait;
+
     public function getId(): string
     {
         return 'hytale-curseforge';
@@ -28,4 +35,27 @@ class HytaleCurseForgePlugin implements Plugin
         // Register Laravel service provider so view namespace "hytale-curseforge::" exists.
         app()->register(HytaleCurseForgeServiceProvider::class);
     }
+
+    public function getSettingsForm(): array
+    {
+        return [
+            TextInput::make('curseforge_api_key')
+                ->label('Curseforge API Key')
+                ->password()
+                ->revealable()
+                ->helperText('Curseforge API Key get on')
+                ->default(fn () => config('hytale-curseforge.curseforge_api_key', '')),
+        ];
+    }
+
+    public function saveSettings(array $data): void
+    {
+        $envData = [];
+        if (isset($data['curseforge_api_key'])) {
+            $envData['CURSEFORGE_API_KEY'] = $data['curseforge_api_key'];
+        }
+
+        $this->writeToEnvironment($envData);
+    }
+
 }
