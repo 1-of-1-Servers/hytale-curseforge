@@ -17,9 +17,12 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use OneOfOne\HytaleCurseForge\Facades\HytaleCurseForge;
-
+/**
+ * Fixed by Eranio
+ */
 class HytaleCurseForgeModsPage extends Page implements HasTable
 {
     use BlockAccessInConflict;
@@ -29,7 +32,6 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
     protected static ?string $slug = 'hytale-mods';
     protected static ?int $navigationSort = 30;
 
-    // Plugin view namespace (registered in HytaleCurseForgeServiceProvider)
     protected string $view = 'hytale-curseforge::filament.server.pages.hytale-curse-forge-mods-page';
 
     /**
@@ -37,8 +39,8 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
      */
     public string $browseBy = 'all';      // all | mods | prefabs | worlds | bootstrap | translations
     public string $sortBy = 'relevance';  // relevance | downloads | updated | newest
-    public string $gameVersion = 'all';   // all | early_access (etc)
-    public array $categories = [];        // array of category ids/keys
+    public string $gameVersion = 'all';   // all | early_access
+    public array $categories = [];        // array of category ids
 
     public static function canAccess(): bool
     {
@@ -87,7 +89,6 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
 
     public function getGameVersionOptions(): array
     {
-        // Keep it simple until the API supports more
         return [
             'all'          => 'All',
             'early_access' => 'Early Access',
@@ -98,12 +99,12 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
     {
         $labels = [
             'blocks'        => 'Blocks',
-            'food_farming'  => 'Food\\Farming',
+            'food_farming'  => 'Food & Farming',
             'furniture'     => 'Furniture',
             'gameplay'      => 'Gameplay',
             'library'       => 'Library',
             'misc'          => 'Miscellaneous',
-            'mobs'          => 'Mobs\\Characters',
+            'mobs'          => 'Mobs & Characters',
             'prefab'        => 'Prefab',
             'qol'           => 'Quality of Life',
             'utility'       => 'Utility',
@@ -111,6 +112,12 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
         ];
 
         try {
+            $apiCategories = HytaleCurseForge::getCategories($this->browseBy);
+
+            if (! empty($apiCategories)) {
+                return $apiCategories;
+            }
+
             $mapped = (array) config('services.curseforge.hytale_category_ids', []);
 
             if (! empty($mapped)) {
@@ -121,9 +128,7 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
                     ->all();
             }
 
-            $apiCategories = HytaleCurseForge::getCategories($this->browseBy);
-
-            return ! empty($apiCategories) ? $apiCategories : $labels;
+            return $labels;
         } catch (\Throwable $e) {
             report($e);
             return $labels;
@@ -141,16 +146,14 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
         $this->resetTablePage();
     }
 
+    public function updatedSortBy(): void
+    {
+        $this->resetTablePage();
+    }
+
     protected function resetTablePage(): void
     {
-        if (method_exists($this, 'setPage')) {
-            $this->setPage(1, 'tablePage');
-            return;
-        }
-
-        if (method_exists($this, 'resetPage')) {
-            $this->resetPage();
-        }
+        $this->resetPage('tablePage');
     }
 
     public function clearFilters(): void
@@ -159,13 +162,11 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
         $this->sortBy = 'relevance';
         $this->gameVersion = 'all';
         $this->categories = [];
-
-        // Reset table to page 1
         $this->resetTablePage();
     }
 
     /**
-     * Filament requires this to be public.
+     * Data fetching for the Filament table
      */
     public function getTableRecords(): LengthAwarePaginator
     {
@@ -185,17 +186,14 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
         $data = $response['data'] ?? [];
         $total = (int) ($response['total'] ?? (is_array($data) ? count($data) : 0));
 
-        // Filament needs a unique __key for array records
         if (is_array($data)) {
             $new = [];
-
             foreach ($data as $i => $record) {
                 $record = is_array($record) ? $record : [];
                 $id = $record['id'] ?? null;
                 $record['__key'] = $id ? (string) $id : ('row_' . $page . '_' . $i);
                 $new[] = $record;
             }
-
             $data = $new;
         }
 
@@ -221,24 +219,15 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
             return (string) $record['id'];
         }
 
-        if (is_object($record) && method_exists($record, 'getKey')) {
-            return (string) $record->getKey();
-        }
-
         return sha1(json_encode($record));
     }
 
     protected function resolveTableRecord(string $key): ?array
     {
         $records = $this->getTableRecords();
-
-        $items = method_exists($records, 'getCollection')
-            ? $records->getCollection()
-            : collect($records);
+        $items = collect($records->items());
 
         return $items->first(function ($record) use ($key) {
-            if (! is_array($record)) return false;
-
             $rk = (string) ($record['__key'] ?? $record['id'] ?? '');
             return $rk === (string) $key;
         });
@@ -287,78 +276,35 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
                             $server = Filament::getTenant();
 
                             $modId = (int) ($record['id'] ?? 0);
-                            if ($modId <= 0) {
-                                throw new Exception('Invalid mod id.');
-                            }
+                            if ($modId <= 0) throw new Exception('Invalid mod id.');
 
                             $fileId = HytaleCurseForge::getBestFileId($record);
-                            if (! $fileId) {
-                                throw new Exception('No downloadable file found.');
-                            }
+                            if (! $fileId) throw new Exception('No downloadable file found.');
 
                             $downloadUrl = HytaleCurseForge::getDownloadUrl($modId, $fileId);
-                            if (! $downloadUrl) {
-                                throw new Exception('Could not retrieve download URL.');
-                            }
+                            if (! $downloadUrl) throw new Exception('Could not retrieve download URL.');
 
-                            $destRoot = trim(HytaleCurseForge::getModsPath(), '/');
+                            $destRoot = 'mods'; // Fixed path
 
-                            // Pull the file into /mods
-                            $fileRepository
-                                ->setServer($server)
-                                ->pull($downloadUrl, $destRoot);
+                            $fileRepository->setServer($server)->pull($downloadUrl, $destRoot);
 
-                            // Guess filename from record data (preferred) or URL (fallback)
-                            $filename =
-                                $record['latestFilesIndexes'][0]['filename']
-                                    ?? $record['latestFiles'][0]['fileName']
-                                    ?? basename(parse_url($downloadUrl, PHP_URL_PATH) ?: '');
+                            $filename = $record['latestFiles'][0]['fileName'] 
+                                ?? $record['latestFilesIndexes'][0]['filename'] 
+                                ?? basename(parse_url($downloadUrl, PHP_URL_PATH) ?: '');
 
-                            if (! $filename) {
-                                Notification::make()
-                                    ->title('Download started')
-                                    ->body("Downloaded to /{$destRoot} (could not detect filename for auto-extract).")
-                                    ->success()
-                                    ->send();
-                                return;
-                            }
-
-                            // Auto-extract ZIPs (Pelican daemon handles /files/decompress)
-                            if (Str::endsWith(Str::lower($filename), ['.zip', '.tar', '.tar.gz', '.tgz', '.rar', '.7z'])) {
+                            if ($filename && Str::endsWith(Str::lower($filename), ['.zip', '.tar', '.tar.gz', '.tgz', '.rar', '.7z'])) {
                                 try {
-                                    $fileRepository
-                                        ->setServer($server)
-                                        ->decompressFile($destRoot, $filename);
-
-                                    Notification::make()
-                                        ->title('Downloaded & extracted')
-                                        ->body("Extracted {$filename} into /{$destRoot}.")
-                                        ->success()
-                                        ->send();
+                                    $fileRepository->setServer($server)->decompressFile($destRoot, $filename);
+                                    Notification::make()->title('Downloaded & extracted')->success()->send();
                                 } catch (\Throwable $e) {
-                                    report($e);
-
-                                    Notification::make()
-                                        ->title('Downloaded, but extract failed')
-                                        ->body("File saved as {$filename} in /{$destRoot}. Extract error: {$e->getMessage()}")
-                                        ->warning()
-                                        ->send();
+                                    Notification::make()->title('Downloaded, extract failed')->body($e->getMessage())->warning()->send();
                                 }
                             } else {
-                                Notification::make()
-                                    ->title('Download complete')
-                                    ->body("Saved {$filename} into /{$destRoot}.")
-                                    ->success()
-                                    ->send();
+                                Notification::make()->title('Download complete')->success()->send();
                             }
                         } catch (Exception $e) {
                             report($e);
-
-                            Notification::make()
-                                ->title('Download failed')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
+                            Notification::make()->title('Download failed')->body($e->getMessage())->danger()->send();
                         }
                     }),
             ]);
@@ -369,33 +315,20 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
         return [
             Action::make('open_mods_folder')
                 ->label('Open Mods Folder')
-                ->url(
-                    fn () => ListFiles::getUrl([
-                        'path' => trim(HytaleCurseForge::getModsPath(), '/'),
-                    ]),
-                    true
-                ),
+                ->url(fn () => ListFiles::getUrl(['path' => 'mods']), true),
         ];
     }
 
     protected function isModInstalled(array $record): bool
     {
         $entries = $this->getInstalledEntries();
-        if (empty($entries)) {
-            return false;
-        }
+        if (empty($entries)) return false;
 
         $candidates = $this->getCandidateNames($record);
-        if (empty($candidates)) {
-            return false;
-        }
-
         $lookup = array_flip(array_map('strtolower', $entries));
+
         foreach ($candidates as $candidate) {
-            $candidate = strtolower($candidate);
-            if (isset($lookup[$candidate])) {
-                return true;
-            }
+            if (isset($lookup[strtolower($candidate)])) return true;
         }
 
         return false;
@@ -404,64 +337,37 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
     protected function getCandidateNames(array $record): array
     {
         $candidates = [];
+        $filename = $record['latestFiles'][0]['fileName'] ?? $record['latestFilesIndexes'][0]['filename'] ?? null;
 
-        $filename =
-            $record['latestFilesIndexes'][0]['filename']
-                ?? $record['latestFiles'][0]['fileName']
-                ?? null;
-
-        if (! $filename) {
-            $downloadUrl = $record['latestFiles'][0]['downloadUrl'] ?? null;
-            if (is_string($downloadUrl) && $downloadUrl !== '') {
-                $filename = basename(parse_url($downloadUrl, PHP_URL_PATH) ?: '');
-            }
-        }
-
-        if (is_string($filename) && $filename !== '') {
+        if ($filename) {
             $candidates[] = $filename;
-            $base = pathinfo($filename, PATHINFO_FILENAME);
-            if ($base !== '') {
-                $candidates[] = $base;
-            }
+            $candidates[] = pathinfo($filename, PATHINFO_FILENAME);
         }
 
-        if (! empty($record['slug'])) {
-            $candidates[] = (string) $record['slug'];
-        }
-
-        if (! empty($record['name'])) {
-            $candidates[] = (string) $record['name'];
-        }
+        if (! empty($record['slug'])) $candidates[] = (string) $record['slug'];
+        if (! empty($record['name'])) $candidates[] = (string) $record['name'];
 
         return array_values(array_unique(array_filter($candidates)));
     }
 
     protected function getInstalledEntries(): array
     {
-        if ($this->installedEntries !== null) {
-            return $this->installedEntries;
-        }
+        if ($this->installedEntries !== null) return $this->installedEntries;
 
         try {
-            /** @var Server $server */
             $server = Filament::getTenant();
-            $destRoot = trim(HytaleCurseForge::getModsPath(), '/');
-
-            /** @var DaemonFileRepository $repo */
-            $repo = app(DaemonFileRepository::class);
-            $repo->setServer($server);
+            $repo = app(DaemonFileRepository::class)->setServer($server);
 
             if (method_exists($repo, 'getDirectory')) {
-                $entries = $repo->getDirectory($destRoot);
+                $entries = $repo->getDirectory('mods');
             } elseif (method_exists($repo, 'listDirectory')) {
-                $entries = $repo->listDirectory($destRoot);
+                $entries = $repo->listDirectory('mods');
             } else {
                 return $this->installedEntries = [];
             }
 
             return $this->installedEntries = $this->extractEntryNames($entries);
         } catch (\Throwable $e) {
-            report($e);
             return $this->installedEntries = [];
         }
     }
@@ -469,25 +375,10 @@ class HytaleCurseForgeModsPage extends Page implements HasTable
     protected function extractEntryNames($entries): array
     {
         $names = [];
-
         foreach (collect($entries) as $entry) {
-            $name = null;
-
-            if (is_array($entry)) {
-                $name = $entry['name'] ?? $entry['file'] ?? $entry['path'] ?? null;
-            } elseif (is_object($entry)) {
-                if (isset($entry->name)) {
-                    $name = $entry->name;
-                } elseif (method_exists($entry, 'getName')) {
-                    $name = $entry->getName();
-                }
-            }
-
-            if (is_string($name) && $name !== '') {
-                $names[] = $name;
-            }
+            $name = is_array($entry) ? ($entry['name'] ?? $entry['file'] ?? null) : ($entry->name ?? null);
+            if ($name) $names[] = $name;
         }
-
         return array_values(array_unique($names));
     }
 }
